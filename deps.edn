@@ -1,1 +1,2 @@
-{:deps {seesaw/seesaw {:mvn/version "1.5.0"}}}
+{:deps {seesaw/seesaw {:mvn/version "1.5.0"}
+        org.pushing-pixels/radiance-theming {:mvn/version "5.0.0"}}}
