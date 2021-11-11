@@ -1,29 +1,55 @@
 (ns pane.indexer
   (:require [clojure.java.io :as io]
-            [clojure.core.async :as async :refer (go <! >! <!! >!!)]))
+            [clojure.core.async :as async :refer (go go-loop <! >! <!! >!!)])
+  (:import [clojure.lang PersistentQueue]))
 
 (def folders-to-ignore #{"node_modules" ".svn" ".git" ".hg" "CVS" ".Trash"})
 
-(defn- ignore? [^java.io.File file]
-  (and
-   (not (.isDirectory file))
-   (.canExecute file)
-   (not (contains? folders-to-ignore (str file)))))
+(defn separate-exes-and-dirs [^java.io.File folder]
+  (let [files (.listFiles folder)]
+    (reduce (fn [acc file]
+              (if (and (.isDirectory file) (not (contains? folders-to-ignore (str file))))
+                (update acc :dirs #(conj % file))
+                (if (.canExecute file)
+                  (update acc :exes #(conj % file))
+                  acc)))
+            {:exes [] :dirs []} files)))
 
-(defn find-executables []
-  (filter ignore? (file-seq (io/file "/"))))
-
-(defn find-executables-async
-  "Find executables on machine, then call passed in callback function with the new value of the state."
-  [^clojure.lang.Atom *atom f]
-  (future
-    (let [files (find-executables)]
-      (reset! *atom {:indexing? false
-                     :files files})
-      (f *atom))))
+(defn bfs-file-seq-async [channel starting-directory]
+  (go-loop [^PersistentQueue queue (conj (PersistentQueue/EMPTY) (io/file starting-directory))]
+    (let [folder (peek queue)
+          {exes :exes dirs :dirs} (separate-exes-and-dirs folder)
+          new-queue (into (pop queue) dirs)]
+      (when-not (empty? exes)
+        (async/onto-chan! channel exes false))
+      (if (empty? new-queue)
+        (async/close! channel)
+        (recur new-queue)))))
 
 (comment
-
+  (separate-exes-and-dirs (io/file "/usr/local/lib/erlang"))
+  (let [d (async/chan 1000)]
+    (bfs-file-seq-async d "/usr/local/lib/erlang")
+    (loop [f (<!! d)]
+      (println (str f))
+      (when-not (nil? f)
+        (recur (<!! d)))))
+  (let [channel (async/chan)]
+    (go (async/onto-chan! channel ["a" "b" "c"]))
+    (println (<!! channel))
+    (println (<!! channel))
+    (println (<!! channel)))
+  (let [starting-folder "/usr/local/lib/erlang"
+        channel (async/chan 50)]
+    (bfs-file-seq-async channel starting-folder)
+    (loop [file (str (<!! channel))]
+      (println file)
+      (if-not (nil? file)
+        (recur (str (<!! channel))))))
+  (let [q (conj (clojure.lang.PersistentQueue/EMPTY) "abc")]
+    (pop q)
+    (pop q))
+  (type (async/chan))
   (let [c (async/chan)]
     (future
       (for [f (file-seq (io/file "/usr"))]
@@ -40,6 +66,4 @@
         (filter #(and (not (.isDirectory %)) (.canExecute %))
                 (file-seq
                  (io/file "/Applications")))))
-
-  (first (filter ignore? (file-seq (io/file "/"))))
   )
