@@ -7,7 +7,6 @@
   (:import [javax.swing UIManager DefaultListModel]
            [javax.swing.event DocumentEvent]
            [org.pushingpixels.radiance.theming.api.skin RadianceTwilightLookAndFeel]))
-
 (def *state (atom {:files #{} :indexing? true}))
 
 (defn- select-first
@@ -28,6 +27,15 @@
             (recur (async/<!! channel)))
           (swap! *atom (fn [x] (update x :indexing? not))))))))
 
+(defn update-listed-files!
+  [list-box search files]
+  (let [model (DefaultListModel.)
+        xf (comp (filter #(s/includes? % search)) (map #(str (.getName %) " | " %)))
+        results (take 10 (sequence xf files))]
+    (doseq [x (sort results)]
+      (.addElement model x))
+    (.setModel list-box model)))
+
 (defn -main [& _]
   (println "Starting counting!")
   (let [fut (load-files-async! *state "/")]
@@ -38,17 +46,20 @@
            list-box (ss/listbox :model ["file 1" "file 2"])
            scroll (ss/scrollable list-box)
            btn (ss/button :text "Cancel Index")
-           v-panel (ss/vertical-panel :items [file-search scroll btn])
+           test-btn (ss/button :text "Run Sublime" :id :test-btn)
+           v-panel (ss/vertical-panel :items [file-search scroll btn test-btn])
            frame (ss/frame :title "Pane"
                            :content v-panel
                            :on-close :dispose)]
+                          (ss/listen test-btn :action (fn [_] (.exec (Runtime/getRuntime) "subl")))
        (ss/listen btn :action
                   (fn [_] (future-cancel fut)))
        (ss/listen file-search
                   :key-released
                   (fn [_]
                     (let [txt (ss/config file-search :text)]
-                      (println txt))))
+                      (update-listed-files! list-box txt (:files @*state))
+                      (ss/pack! frame))))
        (def ^:dynamic *frame* frame)
        (-> frame
            (ss/pack!)
@@ -56,6 +67,11 @@
            ss/show!)))))
 
 (comment
+  #dbg
+   (let [x 1
+         y 2]
+     (-> x
+         (+ y)))
   (-main)
   (type (ss/listbox))
   (count (:files @*state))
@@ -78,7 +94,7 @@
      (doseq [x (sort results)]
        (.addElement model x))
      (.setModel list-box model))
-     (ss/pack! *frame*))
+    (ss/pack! *frame*))
 
   (take 10 (filter #(s/includes? % "n") (map #(.getName %) (:files @*state))))
   (ss/invoke-later (ss/pack! *frame*))
@@ -88,7 +104,7 @@
   (.getContentPane *frame*)
   (ss/config (first (ss/select *frame* [:JTextField])) :text)
   (ss/config *frame* :content)
-  (show-events (ss/text))
+  (show-options (ss/text))
   ;; (show-options (ss/scrollable))
   (-main)
   )
