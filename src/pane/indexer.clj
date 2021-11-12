@@ -1,6 +1,7 @@
 (ns pane.indexer
   (:require [clojure.java.io :as io]
-            [clojure.core.async :as async :refer (go go-loop <! >! <!! >!!)])
+            [clojure.core.async :as async :refer (go go-loop <! >! <!! >!!)]
+            [clojure.string :as s])
   (:import [clojure.lang PersistentQueue]))
 
 (def folders-to-ignore #{"node_modules" ".svn" ".git" ".hg" "CVS" ".Trash"})
@@ -8,7 +9,7 @@
 (defn separate-exes-and-dirs [^java.io.File folder]
   (let [files (.listFiles folder)]
     (reduce (fn [acc file]
-              (if (and (.isDirectory file) (not (contains? folders-to-ignore (str file))))
+              (if (and (.isDirectory file) (not (contains? folders-to-ignore (last (s/split (str file) #"/")))))
                 (update acc :dirs #(conj % file))
                 (if (.canExecute file)
                   (update acc :exes #(conj % file))
@@ -21,7 +22,7 @@
           {exes :exes dirs :dirs} (separate-exes-and-dirs folder)
           new-queue (into (pop queue) dirs)]
       (when-not (empty? exes)
-        (async/onto-chan! channel exes false))
+        (async/>! channel exes))
       (if (empty? new-queue)
         (async/close! channel)
         (recur new-queue)))))
