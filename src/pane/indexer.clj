@@ -6,7 +6,11 @@
 
 (def folders-to-ignore #{"node_modules" ".svn" ".git" ".hg" "CVS" ".Trash"})
 
-(defn separate-exes-and-dirs [^java.io.File folder]
+(defn separate-exes-and-dirs
+  "
+  Lists the files in the passed in folder, and returns a map of exes and dirs.
+  "
+  [^java.io.File folder]
   (let [files (.listFiles folder)]
     (reduce (fn [acc file]
               (if (and (.isDirectory file) (not (contains? folders-to-ignore (last (s/split (str file) #"/")))))
@@ -16,7 +20,12 @@
                   acc)))
             {:exes [] :dirs []} files)))
 
-(defn bfs-file-seq-async [channel starting-directory]
+(defn bfs-file-seq-async
+  "
+  Perform a breadth first search across directories, as opposed to file-seq, which does a depth first search.
+  bfs-file-seq-async will put any executable files it discovers into the passed in channel, as an array of java.io.File objects.
+  "
+  [channel starting-directory]
   (go-loop [^PersistentQueue queue (conj (PersistentQueue/EMPTY) (io/file starting-directory))]
     (let [folder (peek queue)
           {exes :exes dirs :dirs} (separate-exes-and-dirs folder)

@@ -10,10 +10,14 @@
 
 (def *state (atom {:files #{} :indexing? true}))
 
-(defn- select-first [frame kw]
+(defn- select-first
+  "Helper for selecting the first element by class."
+  [frame kw]
   (first (ss/select frame [kw])))
 
-(defn load-files-async! [*atom starting-directory]
+(defn load-files-async!
+  "Asynchronously loads all executables under the starting directory to the passed in atom."
+  [*atom starting-directory]
   (future
     (let [channel (async/chan 1000)]
       (indexer/bfs-file-seq-async channel starting-directory)
