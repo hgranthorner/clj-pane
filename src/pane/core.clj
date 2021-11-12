@@ -30,15 +30,22 @@
 (defn update-listed-files!
   [list-box search files]
   (let [model (DefaultListModel.)
-        xf (comp (filter #(s/includes? % search)) (map #(str (.getName %) " | " %)))
-        results (take 10 (sequence xf files))]
+        lower-search (s/lower-case search)
+        xf (comp (filter #(s/includes? (s/lower-case %) lower-search)) (map #(str (.getName %) " | " %)))
+        results (sequence xf files)]
     (doseq [x (sort results)]
       (.addElement model x))
     (.setModel list-box model)))
 
 (defn -main [& _]
-  (println "Starting counting!")
-  (let [fut (load-files-async! *state "/")]
+  (let [fut
+        (future (let [c (async/chan)]
+                  (indexer/get-osx-applications-async c)
+                  (async/take! c
+                               (fn [fs]
+                                 (swap!
+                                  *state
+                                  (fn [x] (update x :files #(into % fs))))))))]
     (ss/native!)
     (ss/invoke-later
      (UIManager/setLookAndFeel (RadianceTwilightLookAndFeel.))
@@ -51,7 +58,7 @@
            frame (ss/frame :title "Pane"
                            :content v-panel
                            :on-close :dispose)]
-                          (ss/listen test-btn :action (fn [_] (.exec (Runtime/getRuntime) "subl")))
+       (ss/listen test-btn :action (fn [_] (.exec (Runtime/getRuntime) "subl")))
        (ss/listen btn :action
                   (fn [_] (future-cancel fut)))
        (ss/listen file-search

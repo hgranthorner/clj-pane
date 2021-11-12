@@ -36,7 +36,31 @@
         (async/close! channel)
         (recur new-queue)))))
 
+(defn- only-named [n] (filter #(= (.getName %) n)))
+(def ^:private get-all-files (mapcat #(.listFiles %)))
+(def ^:private get-applications
+  (comp get-all-files
+        (only-named "Contents")
+        get-all-files
+        (only-named "MacOS")
+        get-all-files))
+
+(defn get-osx-applications-async
+  "Gets all system and user level application executables and places them on the provided channel"
+  [channel]
+  (async/put! channel
+              (concat
+               (sequence get-applications (.listFiles (io/file "~/Applications")))
+               (sequence get-applications (.listFiles (io/file "/Applications"))))))
+
 (comment
+
+  (def applications (.listFiles (io/file "/Applications")))
+  (into [] get-applications applications)
+  (mapcat
+   (fn [f]
+     (map #(.getName %) (.listFiles (first (.listFiles f)))))
+   (.listFiles (io/file "/Applications")))
   (separate-exes-and-dirs (io/file "/usr/local/lib/erlang"))
   (let [d (async/chan 1000)]
     (bfs-file-seq-async d "/usr/local/lib/erlang")
