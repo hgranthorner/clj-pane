@@ -10,6 +10,9 @@
 
 (def *state (atom {:files #{} :indexing? true}))
 
+(defn- select-first [frame kw]
+  (first (ss/select frame [kw])))
+
 (defn load-files-async! [*atom starting-directory]
   (future
     (let [channel (async/chan 1000)]
@@ -61,9 +64,20 @@
   (let [text-field (first (ss/select *frame* [:JTextField]))]
     (doseq [l (.getKeyListeners text-field)]
       (.removeKeyListener text-field l)))
-      
-  (ss/invoke-later (ss/pack! *frame*))
 
+  (let [list-box (select-first *frame* :JList)
+        model (DefaultListModel.)
+        search (ss/config (select-first *frame* :JTextField) :text)
+        xf (comp (filter #(s/includes? % search)) (map #(str (.getName %) " | " %)))
+        results (take 10 (sequence xf (:files @*state)))]
+    (ss/invoke-later
+     (doseq [x (sort results)]
+       (.addElement model x))
+     (.setModel list-box model))
+     (ss/pack! *frame*))
+
+  (take 10 (filter #(s/includes? % "n") (map #(.getName %) (:files @*state))))
+  (ss/invoke-later (ss/pack! *frame*))
   (ss/invoke-later
    (let [new-panel (ss/vertical-panel :items [(ss/text :text "Hello world")])]
      (ss/config! *frame* :content new-panel)))

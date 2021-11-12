@@ -11,7 +11,7 @@
     (reduce (fn [acc file]
               (if (and (.isDirectory file) (not (contains? folders-to-ignore (last (s/split (str file) #"/")))))
                 (update acc :dirs #(conj % file))
-                (if (.canExecute file)
+                (if (and (.canExecute file) (not (.isDirectory file)))
                   (update acc :exes #(conj % file))
                   acc)))
             {:exes [] :dirs []} files)))
